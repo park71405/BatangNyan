@@ -1,7 +1,9 @@
 """스프라이트 시트 로드·스케일·키컬러 합성.
 
-walk는 가로 베이크 이동을 중앙 정렬로 제거하고,
-jump는 무게중심 X를 고정한 뒤 창 Y 포물선만 쓴다.
+walk: 시트에 가로로 베이크된 이동을 프레임 중앙 정렬로 제거한다.
+jump: 발 바닥 + 몸통 무게중심 X를 고정한 뒤, 창 Y 포물선만 쓴다
+      (시트에 그려진 가로·세로 이동이 창 이동과 겹치면 ‘갔다가 돌아옴’처럼 보인다).
+hiss: 프레임별 독립 스케일을 피하고 전체 프레임의 최대 콘텐츠 높이 기준 단일 배율을 적용한다.
 """
 
 import math
@@ -11,13 +13,13 @@ from .constants import (
     HELD_BODY_SCALE,
     IMG_DIR,
     KEY_COLOR,
-    KEY_HEX,
     PADDING,
     SCALE,
     WALK_SCALE,
+    WALK_STATES,
 )
 
-__all__ = ['KEY_HEX', 'KEY_COLOR', 'SCALE', 'load_all', 'load_sheet', 'load_sheet_gaps']
+__all__ = ['load_all']
 
 
 def _is_guide_pixel(r, g, b, a):
@@ -64,7 +66,7 @@ def _strip_guides(frame):
 def _register_frames(cells):
     """셀마다 내용만 잘라 공유 캔버스에 올린다.
 
-    가로는 중앙 정렬(walk 베이크 이동 제거), 세로는 시트 상대 위치 유지(밥 등).
+    가로는 중앙 정렬(walk 베이크 이동 제거), 세로는 시트 상대 위치 유지.
     """
     boxes = []
     cleaned = []
@@ -208,7 +210,7 @@ def _content_anchor_x(frame):
 def _pin_jump_frames(frames):
     """점프 프레임을 바닥 정렬하고 몸통 무게중심 X를 공유 중심선에 고정한다.
 
-    시트에 베이크된 가로·세로 이동이 ‘갔다가 돌아오는’ 착시를 만든다.
+    이후 창은 jump_y_offset 만으로 포물선을 그린다 (가로 dx 없음).
     """
     metas = []
     for img in frames:
@@ -235,7 +237,10 @@ def _pin_jump_frames(frames):
 
 
 def _to_display(frames):
-    """RGBA → 키컬러 RGB. 반투명 가장자리는 잘라 키컬러 fringe를 막는다."""
+    """RGBA → 키컬러 RGB.
+
+    알파 < 200 은 완전 투명으로 잘라 반투명 가장자리가 키컬러로 남는 fringe 를 막는다.
+    """
     result = []
     for frame in frames:
         r, g, b, a = frame.split()
@@ -248,7 +253,10 @@ def _to_display(frames):
 
 
 def _unify_size(states):
-    """모든 상태 프레임을 동일 크기로 맞춘다 (바닥·가로 중앙 패딩)."""
+    """모든 상태 프레임을 동일 크기로 맞춘다 (바닥·가로 중앙 패딩).
+
+    창 geometry가 상태마다 바뀌면 깜빡이므로, 로드 시점에 한 번 통일한다.
+    """
     max_w = max(f.width for frames in states.values() for f in frames)
     max_h = max(f.height for frames in states.values() for f in frames)
     result = {}
@@ -264,7 +272,7 @@ def _unify_size(states):
     return result
 
 
-def load_all():
+def load_all(scale_factor=1.0):
     """게임에 쓰는 모든 상태 스프라이트를 로드·스케일·통일 크기로 반환한다."""
     raw = {
         'walk_r': load_sheet('cat-walk-right.png', 8),
@@ -275,19 +283,36 @@ def load_all():
         'jump_r': _pin_jump_frames(load_sheet('cat-jump-cycle-right.png', 6)),
         'jump_l': _pin_jump_frames(load_sheet('cat-jump-cycle-left.png', 6)),
     }
-    extra = IMG_DIR / 'cat-extra-poses.png'
-    if extra.exists():
-        raw['sleep'] = load_sheet('cat-extra-poses.png', 4, 1, 2)
-        raw['stretch'] = load_sheet('cat-extra-poses.png', 4, 2, 3)
+    if (IMG_DIR / 'cat-hissing.png').exists():
+        raw['hiss'] = load_sheet('cat-hissing.png', 8)
 
     walk_bb = _content_bbox(raw['walk_r'][0])
     walk_content_h = (walk_bb[3] - walk_bb[1]) if walk_bb else raw['walk_r'][0].height
-    held_body_h = max(1, round(walk_content_h * HELD_BODY_SCALE))
+    held_body_h = max(1, round(walk_content_h * HELD_BODY_SCALE * scale_factor))
 
     scaled = {}
     for k, v in raw.items():
-        scale = WALK_SCALE if k in ('walk_r', 'walk_l') else SCALE
+        if k == 'hiss':
+            continue  # 아래에서 groom 기준 높이로 별도 처리
+        scale = (WALK_SCALE if k in WALK_STATES else SCALE) * scale_factor
         scaled[k] = _scale_rgba(v, scale)
+
+    if 'hiss' in raw:
+        ref = scaled.get('groom') or scaled.get('idle')
+        ref_bb = _content_bbox(ref[0]) if ref else None
+        ref_h = (ref_bb[3] - ref_bb[1]) if ref_bb else None
+        if ref_h:
+            # 프레임별 독립 스케일을 피하기 위해 전체 프레임의 최대 콘텐츠 높이로
+            # 단일 배율을 결정하고 _scale_rgba 로 균일 적용한다.
+            bbs = [_content_bbox(f) for f in raw['hiss']]
+            content_heights = [(bb[3] - bb[1]) for bb in bbs if bb is not None]
+            if content_heights:
+                hiss_scale = ref_h / max(content_heights) * 1.1
+                scaled['hiss'] = _scale_rgba(raw['hiss'], hiss_scale)
+            else:
+                scaled['hiss'] = _scale_rgba(raw['hiss'], SCALE * scale_factor)
+        else:
+            scaled['hiss'] = _scale_rgba(raw['hiss'], SCALE * scale_factor)
 
     if (IMG_DIR / 'cat-click.png').exists():
         click_raw = load_sheet_gaps('cat-click.png', 7)

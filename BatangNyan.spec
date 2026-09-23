@@ -23,6 +23,7 @@ exe = EXE(
     a.datas,
     [],
     name='BatangNyan',
+    icon='cat1.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
