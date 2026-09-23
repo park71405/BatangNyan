@@ -10,6 +10,16 @@ Windows 바탕화면 위를 돌아다니는 투명 오버레이 고양이.
 
 ## 실행
 
+### 방법 1: exe 실행 (Python 설치 불필요)
+
+1. `dist` 폴더의 `BatangNyan.exe`를 내려받는다.
+2. 원하는 위치에 두고 더블클릭으로 실행한다.
+3. Windows SmartScreen 경고가 뜨면 **추가 정보** → **실행**을 누른다.
+
+종료: 트레이 → **종료**.
+
+### 방법 2: 소스에서 실행
+
 ```bash
 pip install pillow pystray
 python main.py
@@ -17,7 +27,14 @@ python main.py
 
 프로젝트 루트에서 실행. 종료: 트레이 → **종료**.
 
-배포 빌드: `pyinstaller BatangNyan.spec` → `dist/BatangNyan.exe`
+### exe 직접 빌드
+
+```bash
+pip install pyinstaller
+pyinstaller BatangNyan.spec
+```
+
+빌드 결과물: `dist/BatangNyan.exe`
 
 ---
 
