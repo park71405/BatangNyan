@@ -3,6 +3,12 @@
 Windows 바탕화면 위를 돌아다니는 투명 오버레이 고양이.  
 *최종 반영: 2026-09-18*
 
+## 데모
+
+<video src="BatangNyan_test.mp4" controls muted width="600"></video>
+
+▶ [데모 영상 보기 (BatangNyan_test.mp4)](BatangNyan_test.mp4)
+
 ---
 
 ## 실행
@@ -40,6 +46,7 @@ BatangNyan/
 ├── main.py                 ← 진입점
 ├── README.md               ← 이 문서
 ├── cat1.png                ← 트레이 아이콘
+├── BatangNyan_test.mp4     ← 데모 영상
 ├── img/                    ← 스프라이트 시트
 │   ├── cat-walk-right.png  (8) → walk_r
 │   ├── cat-walk-left.png   (8) → walk_l
